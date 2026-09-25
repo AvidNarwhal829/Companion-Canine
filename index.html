@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Companion Canine Time Tracker</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #16a085;
+            --bg: #f4f7f6;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --danger: #c0392b;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: var(--primary);
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+        select, input, button {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 5px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        button.danger {
+            background-color: var(--danger);
+        }
+        .timer-display {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: bold;
+            margin: 15px 0;
+            color: var(--primary);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background-color: #fafafa;
+            color: #666;
+        }
+        .actions-bar {
+            display: flex;
+            gap: 10px;
+        }
+        .actions-bar button {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🐕 Companion Canine Time Tracker</h1>
+
+    <!-- Active Timer Card -->
+    <div class="card">
+        <div class="form-group">
+            <label for="taskCategory">Select Task Category</label>
+            <select id="taskCategory">
+                <option value="AM Board and Training">AM Board and Training</option>
+                <option value="PM Board and Training">PM Board and Training</option>
+                <option value="Private Class">Private Class</option>
+                <option value="Group Class">Group Class</option>
+                <option value="Pack Walk">Pack Walk</option>
+            </select>
+        </div>
+        
+        <div class="timer-display" id="timerDisplay">00:00:00</div>
+        
+        <div class="actions-bar">
+            <button id="clockInBtn" onclick="clockIn()">Clock In</button>
+            <button id="clockOutBtn" class="danger" onclick="clockOut()" disabled>Clock Out</button>
+        </div>
+    </div>
+
+    <!-- Manual Entry Card -->
+    <div class="card">
+        <h3>Add Past Shift Manually</h3>
+        <div class="form-group">
+            <label>Category</label>
+            <select id="manualCategory">
+                <option value="AM Board and Training">AM Board and Training</option>
+                <option value="PM Board and Training">PM Board and Training</option>
+                <option value="Private Class">Private Class</option>
+                <option value="Group Class">Group Class</option>
+                <option value="Pack Walk">Pack Walk</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Date & Start Time</label>
+            <input type="datetime-local" id="manualStart">
+        </div>
+        <div class="form-group">
+            <label>Date & End Time</label>
+            <input type="datetime-local" id="manualEnd">
+        </div>
+        <button onclick="addManualShift()">Add Entry</button>
+    </div>
+
+    <!-- History / Export Card -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="margin:0;">Shift History</h3>
+            <button onclick="exportCSV()" style="width: auto; padding: 6px 12px; font-size: 0.8rem;">Export CSV</button>
+        </div>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Duration</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                    <!-- Dynamic Rows -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    let activeSession = JSON.parse(localStorage.getItem('cc_active_session')) || null;
+    let timerInterval = null;
+
+    window.onload = function() {
+        if (activeSession) {
+            document.getElementById('taskCategory').disabled = true;
+            document.getElementById('clockInBtn').disabled = true;
+            document.getElementById('clockOutBtn').disabled = false;
+            startTimer(new Date(activeSession.startTime));
+        }
+        renderHistory();
+    };
+
+    function clockIn() {
+        const category = document.getElementById('taskCategory').value;
+        activeSession = {
+            category: category,
+            startTime: new Date().toISOString()
+        };
+        localStorage.setItem('cc_active_session', JSON.stringify(activeSession));
+        
+        document.getElementById('taskCategory').disabled = true;
+        document.getElementById('clockInBtn').disabled = true;
+        document.getElementById('clockOutBtn').disabled = false;
+        startTimer(new Date(activeSession.startTime));
+    }
+
+    function clockOut() {
+        if (!activeSession) return;
+        const endTime = new Date().toISOString();
+        saveShift(activeSession.category, activeSession.startTime, endTime);
+        
+        clearInterval(timerInterval);
+        localStorage.removeItem('cc_active_session');
+        activeSession = null;
+
+        document.getElementById('taskCategory').disabled = false;
+        document.getElementById('clockInBtn').disabled = false;
+        document.getElementById('clockOutBtn').disabled = true;
+        document.getElementById('timerDisplay').innerText = "00:00:00";
+        renderHistory();
+    }
+
+    function startTimer(startTime) {
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            const now = new Date();
+            const diff = Math.floor((now - startTime) / 1000);
+            const hrs = String(Math.floor(diff / 3600)).padStart(2, '0');
+            const mins = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+            const secs = String(diff % 60).padStart(2, '0');
+            document.getElementById('timerDisplay').innerText = `${hrs}:${mins}:${secs}`;
+        }, 1000);
+    }
+
+    function saveShift(category, startIso, endIso) {
+        const history = JSON.parse(localStorage.getItem('cc_history')) || [];
+        history.unshift({ category, start: startIso, end: endIso });
+        localStorage.setItem('cc_history', JSON.stringify(history));
+    }
+
+    function addManualShift() {
+        const category = document.getElementById('manualCategory').value;
+        const startVal = document.getElementById('manualStart').value;
+        const endVal = document.getElementById('manualEnd').value;
+        if (!startVal || !endVal) {
+            alert('Please select both start and end times.');
+            return;
+        }
+        saveShift(category, new Date(startVal).toISOString(), new Date(endVal).toISOString());
+        renderHistory();
+        document.getElementById('manualStart').value = '';
+        document.getElementById('manualEnd').value = '';
+    }
+
+    function deleteShift(index) {
+        const history = JSON.parse(localStorage.getItem('cc_history')) || [];
+        history.splice(index, 1);
+        localStorage.setItem('cc_history', JSON.stringify(history));
+        renderHistory();
+    }
+
+    function formatLocalDateTime(isoString) {
+        const d = new Date(isoString);
+        return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function calculateDuration(startIso, endIso) {
+        const diff = Math.floor((new Date(endIso) - new Date(startIso)) / 1000);
+        const hrs = Math.floor(diff / 3600);
+        const mins = Math.floor((diff % 3600) / 60);
+        return `${hrs}h ${mins}m`;
+    }
+
+    function renderHistory() {
+        const history = JSON.parse(localStorage.getItem('cc_history')) || [];
+        const tbody = document.getElementById('historyTableBody');
+        tbody.innerHTML = '';
+        history.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.category}</td>
+                <td>${formatLocalDateTime(item.start)}</td>
+                <td>${formatLocalDateTime(item.end)}</td>
+                <td>${calculateDuration(item.start, item.end)}</td>
+                <td><button onclick="deleteShift(${index})" style="background:none; color:var(--danger); border:none; padding:0; cursor:pointer; font-weight:bold;">X</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function exportCSV() {
+        const history = JSON.parse(localStorage.getItem('cc_history')) || [];
+        if (history.length === 0) {
+            alert('No shift history to export.');
+            return;
+        }
+        let csvContent = "data:text/csv;charset=utf-8,Category,Start Time,End Time,Duration (Hours)\n";
+        history.forEach(item => {
+            const diffHours = ((new Date(item.end) - new Date(item.start)) / (1000 * 60 * 60)).toFixed(2);
+            csvContent += `"${item.category}","${item.start}","${item.end}",${diffHours}\n`;
+        });
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "companion_canine_shifts.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
+
+</body>
+</html>
